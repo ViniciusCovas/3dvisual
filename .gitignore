@@ -1,0 +1,10 @@
+node_modules
+dist
+*.local
+
+# Modelos de MediaPipe: se descargan/copian con `npm install` (scripts/fetch-models.mjs).
+# No se versionan para mantener el repo liviano.
+public/models/*
+!public/models/README.md
+
+.DS_Store
