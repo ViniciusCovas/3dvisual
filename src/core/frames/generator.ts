@@ -1,18 +1,18 @@
 import * as THREE from 'three';
 import type { FrameSpec, Vec2 } from './spec';
-import { innermostPoint, offsetOutline, outermostPoint, sampleLensOutline } from './outline';
+import { innermostPoint, offsetOutline, outermostPoint, sampleLensPathMm } from './outline';
 
 export interface FrameGeometries {
   /** Aros izquierdo y derecho (con hueco para el lente). */
   rims: THREE.BufferGeometry[];
   /** Lentes translúcidos. */
   lenses: THREE.BufferGeometry[];
-  /** Puente(s). */
+  /** Puente(s), según bridgeStyle. */
   bridges: THREE.BufferGeometry[];
-  /** Patillas (se posicionan/rotan vía sus propias matrices ya aplicadas). */
+  /** Patillas (matrices ya aplicadas). */
   temples: THREE.BufferGeometry[];
-  /** Centro del lente derecho en x (mm), útil para depurar. */
-  rightLensCenterX: number;
+  /** Barras browline (vacío si el spec no las lleva). */
+  browBars: THREE.BufferGeometry[];
 }
 
 const TEMPLE_LENGTH = 110; // mm hacia atrás
@@ -51,22 +51,28 @@ function translate(points: Vec2[], dx: number): Vec2[] {
  * +z = hacia la cámara (las patillas van en -z).
  */
 export function buildFrameGeometries(spec: FrameSpec): FrameGeometries {
-  const inner = sampleLensOutline(spec);
-  const outer = offsetOutline(inner, spec.rimThickness);
-  const rightCenterX = spec.bridge / 2 + spec.rimThickness + spec.lensWidth / 2;
+  const inner = sampleLensPathMm(spec);
+  const outer = offsetOutline(inner, spec.rimThicknessMm);
+  const rightCenterX = spec.bridgeMm / 2 + spec.rimThicknessMm + spec.lensWidthMm / 2;
+  const depth = spec.rimDepthMm;
 
   const rims: THREE.BufferGeometry[] = [];
   const lenses: THREE.BufferGeometry[] = [];
   const temples: THREE.BufferGeometry[] = [];
+  const browBars: THREE.BufferGeometry[] = [];
 
+  const bevel = Math.min(0.4, spec.rimThicknessMm * 0.3);
   const extrudeOpts: THREE.ExtrudeGeometryOptions = {
-    depth: spec.depth,
+    depth,
     bevelEnabled: true,
-    bevelThickness: 0.4,
-    bevelSize: 0.35,
+    bevelThickness: bevel,
+    bevelSize: bevel,
     bevelSegments: 2,
     steps: 1,
   };
+
+  // Punto superior del contorno interior, para asentar browline y puente alto.
+  const topY = inner.reduce((m, q) => Math.max(m, q.y), -Infinity);
 
   for (const side of [1, -1] as const) {
     const innerSide = side === 1 ? translate(inner, rightCenterX) : translate(mirrorX(inner), -rightCenterX);
@@ -75,7 +81,7 @@ export function buildFrameGeometries(spec: FrameSpec): FrameGeometries {
     const rimShape = shapeFromPoints(outerSide);
     rimShape.holes.push(pathFromPoints([...innerSide].reverse()));
     const rim = new THREE.ExtrudeGeometry(rimShape, extrudeOpts);
-    rim.translate(0, 0, -spec.depth / 2);
+    rim.translate(0, 0, -depth / 2);
     rims.push(rim);
 
     const lens = new THREE.ExtrudeGeometry(shapeFromPoints(innerSide), {
@@ -85,35 +91,62 @@ export function buildFrameGeometries(spec: FrameSpec): FrameGeometries {
     lens.translate(0, 0, -LENS_DEPTH / 2);
     lenses.push(lens);
 
-    // Patilla: caja desde la bisagra (punto exterior del aro) hacia atrás (-z),
-    // con una leve apertura hacia afuera.
+    // Patilla: caja desde la bisagra (punto exterior del aro) hacia atrás (-z).
     const hinge = outermostPoint(outerSide.map((p) => ({ x: side === 1 ? p.x : -p.x, y: p.y })));
     const hingeX = side * hinge.x;
-    const hingeY = Math.min(hinge.y + 4, spec.lensHeight * 0.35);
-    const temple = new THREE.BoxGeometry(spec.rimThickness * 0.9, TEMPLE_HEIGHT, TEMPLE_LENGTH);
+    const hingeY = Math.min(hinge.y + 4, spec.lensHeightMm * 0.35);
+    const temple = new THREE.BoxGeometry(Math.max(spec.rimThicknessMm * 0.9, 1.6), TEMPLE_HEIGHT, TEMPLE_LENGTH);
     const m = new THREE.Matrix4()
       .makeRotationY(side * THREE.MathUtils.degToRad(-4)) // leve apertura
-      .setPosition(hingeX, hingeY, -TEMPLE_LENGTH / 2 - spec.depth / 2);
+      .setPosition(hingeX, hingeY, -TEMPLE_LENGTH / 2 - depth / 2);
     temple.applyMatrix4(m);
     temples.push(temple);
+
+    // Browline: barra gruesa asentada sobre el borde superior de cada lente.
+    if (spec.browline) {
+      const barLen = spec.lensWidthMm + spec.rimThicknessMm * 2 + 2;
+      const bar = new THREE.BoxGeometry(barLen, 5, depth + 1);
+      bar.translate(side * rightCenterX, topY + 1.5, 0);
+      browBars.push(bar);
+    }
   }
 
-  // Puente: conecta los bordes interiores en la zona alta de los lentes.
+  // Puente(s) según estilo, conectando los bordes interiores.
   const innerRight = translate(inner, rightCenterX);
   const innerEdge = innermostPoint(innerRight);
   const bridgeSpan = innerEdge.x * 2 + 2; // solape de 1 mm por lado dentro de cada aro
-  const bridgeY = spec.lensHeight * 0.28;
   const bridges: THREE.BufferGeometry[] = [];
 
-  const mainBridge = new THREE.BoxGeometry(bridgeSpan, 4, spec.depth * 0.9);
-  mainBridge.translate(0, bridgeY, 0);
-  bridges.push(mainBridge);
-
-  if (spec.doubleBridge) {
-    const upperBar = new THREE.BoxGeometry(bridgeSpan + 6, 2.2, spec.depth * 0.6);
-    upperBar.translate(0, bridgeY + 6, 0);
-    bridges.push(upperBar);
+  switch (spec.bridgeStyle) {
+    case 'keyhole': {
+      // Ojo de cerradura: barra alta + dos apoyos que bajan junto a cada aro.
+      const bar = new THREE.BoxGeometry(bridgeSpan, 3.2, depth * 0.9);
+      bar.translate(0, spec.lensHeightMm * 0.3, 0);
+      bridges.push(bar);
+      for (const side of [1, -1]) {
+        const post = new THREE.BoxGeometry(2, 6, depth * 0.9);
+        post.translate(side * (bridgeSpan / 2 - 1), spec.lensHeightMm * 0.3 - 4, 0);
+        bridges.push(post);
+      }
+      break;
+    }
+    case 'doubleBar': {
+      const mainBar = new THREE.BoxGeometry(bridgeSpan, 3.5, depth * 0.9);
+      mainBar.translate(0, spec.lensHeightMm * 0.22, 0);
+      bridges.push(mainBar);
+      const upperBar = new THREE.BoxGeometry(bridgeSpan + 6, 2.2, depth * 0.6);
+      upperBar.translate(0, topY + 0.5, 0);
+      bridges.push(upperBar);
+      break;
+    }
+    case 'saddle':
+    default: {
+      const bar = new THREE.BoxGeometry(bridgeSpan, 4.5, depth * 0.9);
+      bar.translate(0, spec.lensHeightMm * 0.28, 0);
+      bridges.push(bar);
+      break;
+    }
   }
 
-  return { rims, lenses, bridges, temples, rightLensCenterX: rightCenterX };
+  return { rims, lenses, bridges, temples, browBars };
 }

@@ -1,9 +1,9 @@
 import { RATING_LABEL, RATING_ORDER } from '../core/color/palette';
-import { COLORS, useAppStore } from '../state/store';
+import { COLORS, selectedColor, useAppStore } from '../state/store';
 
 const RATING_BADGE: Record<string, string> = {
   excelente: 'bg-emerald-500/20 text-emerald-300',
-  muy_bueno: 'bg-sky-500/20 text-sky-300',
+  muyBueno: 'bg-sky-500/20 text-sky-300',
   posible: 'bg-zinc-500/20 text-zinc-300',
   evitar: 'bg-rose-500/20 text-rose-300',
 };
@@ -11,6 +11,7 @@ const RATING_BADGE: Record<string, string> = {
 export function ColorPicker() {
   const colorId = useAppStore((s) => s.colorId);
   const setColorId = useAppStore((s) => s.setColorId);
+  const current = selectedColor(colorId);
 
   return (
     <section>
@@ -32,9 +33,9 @@ export function ColorPicker() {
                 {group.map((c) => (
                   <button
                     key={c.id}
-                    title={c.name}
+                    title={`${c.name} — ${c.note}`}
                     onClick={() => setColorId(c.id)}
-                    className={`h-9 w-9 rounded-full border-2 transition ${
+                    className={`h-8 w-8 rounded-full border-2 transition ${
                       c.id === colorId
                         ? 'scale-110 border-amber-400'
                         : 'border-zinc-600 hover:border-zinc-400'
@@ -48,6 +49,9 @@ export function ColorPicker() {
           );
         })}
       </div>
+      <p className="mt-2 min-h-8 text-xs text-zinc-500">
+        <span className="font-medium text-zinc-300">{current.name}.</span> {current.note}
+      </p>
     </section>
   );
 }

@@ -1,53 +1,56 @@
-/** Punto 2D en el plano del lente (mm, origen en el centro del lente derecho). */
+import type { FrameColor } from '../color/palette';
+
+/** Punto 2D genérico (mm o normalizado según contexto). */
 export interface Vec2 {
   x: number;
   y: number;
 }
 
 /**
- * Parámetros del contorno del lente. El contorno final es una curva cerrada
- * (superelipse asimétrica + modificadores) muestreada como puntos 2D — ver
- * `outline.ts`. Los exponentes controlan cuán "cuadrada" es cada mitad.
+ * Nodo de bezier cúbico del contorno del lente, en coordenadas normalizadas
+ * (caja unidad [-0.5, 0.5]²): `p` ancla, `cIn`/`cOut` manijas absolutas.
  */
-export interface OutlineParams {
-  /** Exponente superelipse de la mitad superior (2 = elipse, 4+ = cuadrado suavizado). */
-  topSquareness: number;
-  /** Exponente superelipse de la mitad inferior. */
-  bottomSquareness: number;
-  /** Elevación de la esquina exterior-superior en mm (cat-eye / lift). */
-  outerLift: number;
-  /** Caída de la esquina exterior-inferior en mm (wayfarer/navigator: base más angosta). */
-  bottomTaper: number;
-  /** Redondeo extra del cuadrante inferior (panto). 0 = sin efecto. */
-  pantoRound: number;
+export interface BezierPoint {
+  p: [number, number];
+  cIn: [number, number];
+  cOut: [number, number];
 }
 
-export type FrameFinish = 'gloss' | 'translucent' | 'matte' | 'metal';
+export type BridgeStyle = 'keyhole' | 'saddle' | 'doubleBar';
+export type FrameMaterial = 'acetate' | 'metal' | 'combi';
 
 /**
- * Especificación completa de un armazón procedural. Todas las medidas en mm,
- * siguiendo la nomenclatura óptica: calibre (ancho de lente), puente, altura.
+ * Especificación completa de un armazón procedural (SPEC §3.2).
+ * `lensPath` es el contorno de UN lente (el derecho de la persona),
+ * normalizado; las medidas en mm lo escalan al construir la geometría.
  */
 export interface FrameSpec {
   id: string;
   name: string;
   description: string;
-  /** Ancho del lente (calibre), mm. Rango típico de Ana: 50–54. */
-  lensWidth: number;
-  /** Altura del lente, mm. Rango típico: 40–44. */
-  lensHeight: number;
-  /** Puente, mm. Rango típico: 16–19. */
-  bridge: number;
-  /** Grosor del aro alrededor del lente, mm. */
-  rimThickness: number;
-  /** Profundidad de extrusión del frente, mm. */
-  depth: number;
-  /** Doble puente estilo navigator/aviator. */
-  doubleBridge: boolean;
-  outline: OutlineParams;
+  lensPath: BezierPoint[];
+  /** Calibre (ancho de lente), mm. Rango de Ana: 50–54. */
+  lensWidthMm: number;
+  bridgeMm: number;
+  lensHeightMm: number;
+  /** 0–1, elevación cat-eye de la esquina exterior-superior. */
+  outerLift: number;
+  rimThicknessMm: number;
+  /** Profundidad de extrusión del frente (eje Z), mm. */
+  rimDepthMm: number;
+  bridgeStyle: BridgeStyle;
+  material: FrameMaterial;
+  /** Color activo; en runtime lo asigna la selección del ColorPicker. */
+  color?: FrameColor;
+  templeStyle: 'standard';
+  /** Barra superior gruesa estilo browline (aro inferior fino en metal). */
+  browline?: boolean;
 }
+
+/** Elevación máxima del lift exterior cuando outerLift = 1, en mm. */
+export const OUTER_LIFT_MAX_MM = 5;
 
 /** Ancho total del frente (aro a aro), mm. */
 export function totalFrontWidth(spec: FrameSpec): number {
-  return 2 * spec.lensWidth + spec.bridge + 2 * spec.rimThickness;
+  return 2 * spec.lensWidthMm + spec.bridgeMm + 2 * spec.rimThicknessMm;
 }

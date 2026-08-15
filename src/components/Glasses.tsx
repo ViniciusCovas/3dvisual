@@ -3,14 +3,12 @@ import * as THREE from 'three';
 import { useFrame, useThree } from '@react-three/fiber';
 import type { FaceFrame } from '../core/face/types';
 import { LM } from '../core/face/types';
+import { pxPerMm } from '../core/face/measures';
 import { buildFrameGeometries } from '../core/frames/generator';
 import { buildMaterials } from '../core/frames/materials';
 import type { FrameSpec } from '../core/frames/spec';
 import type { FrameColor } from '../core/color/palette';
-import type { FitAdjust } from '../state/store';
-
-/** Distancia sien-a-sien (landmarks 127/356) de una cabeza adulta, en mm. */
-const HEAD_TEMPLE_WIDTH_MM = 140;
+import { useAppStore, type FitAdjust } from '../state/store';
 
 interface GlassesProps {
   faceRef: MutableRefObject<FaceFrame | null>;
@@ -24,6 +22,7 @@ interface GlassesProps {
 const tmpMatrix = new THREE.Matrix4();
 const tmpQuat = new THREE.Quaternion();
 const tmpPos = new THREE.Vector3();
+const tmpScale = new THREE.Vector3();
 
 /**
  * Extrae la rotación de la facialTransformationMatrix. MediaPipe entrega la
@@ -42,8 +41,8 @@ function quaternionFromFaceMatrix(data: number[], out: THREE.Quaternion): void {
 /**
  * Lentes procedurales anclados a la cabeza:
  *  - rotación: facialTransformationMatrix (pose de cabeza)
- *  - posición: landmark 168 (puente nasal), en px del overlay
- *  - escala: distancia 3D entre sienes (127/356) → px por mm
+ *  - posición: landmark 168 (raíz nasal), en px del overlay
+ *  - escala px→mm: DIP calibrada (iris 468/473) o ancho bitemporal asumido
  * El grupo exterior lleva pose y escala global; el interior, los ajustes
  * finos del usuario en coordenadas locales de la cabeza (mm).
  */
@@ -52,17 +51,23 @@ export function Glasses({ faceRef, spec, color, fit, smoothing }: GlassesProps) 
   const { size } = useThree();
 
   const geos = useMemo(() => buildFrameGeometries(spec), [spec]);
-  const mats = useMemo(() => buildMaterials(color.hex, color.finish), [color.hex, color.finish]);
+  const mats = useMemo(
+    () => buildMaterials(color.hex, color.finish, spec.material),
+    [color.hex, color.finish, spec.material],
+  );
 
   useEffect(() => {
     return () => {
-      [...geos.rims, ...geos.lenses, ...geos.bridges, ...geos.temples].forEach((g) => g.dispose());
+      [...geos.rims, ...geos.lenses, ...geos.bridges, ...geos.temples, ...geos.browBars].forEach(
+        (g) => g.dispose(),
+      );
     };
   }, [geos]);
   useEffect(() => {
     return () => {
       mats.frame.dispose();
       mats.lens.dispose();
+      mats.accent.dispose();
     };
   }, [mats]);
 
@@ -80,20 +85,12 @@ export function Glasses({ faceRef, spec, color, fit, smoothing }: GlassesProps) 
     const H = size.height;
     const lm = face.landmarks;
     const anchor = lm[LM.NOSE_BRIDGE];
-    const tR = lm[LM.RIGHT_TEMPLE];
-    const tL = lm[LM.LEFT_TEMPLE];
 
-    // Posición del puente nasal en px del overlay (origen al centro, +y arriba).
+    // Posición de la raíz nasal en px del overlay (origen al centro, +y arriba).
     tmpPos.set((anchor.x - 0.5) * W, (0.5 - anchor.y) * H, 0);
 
-    // Escala: distancia 3D entre sienes (z viene normalizado por el ancho de
-    // imagen, igual que x), robusta frente a giros de cabeza.
-    const dx = (tR.x - tL.x) * W;
-    const dy = (tR.y - tL.y) * H;
-    const dz = (tR.z - tL.z) * W;
-    const templeDistPx = Math.hypot(dx, dy, dz);
-    const pxPerMm = templeDistPx / HEAD_TEMPLE_WIDTH_MM;
-    const s = pxPerMm * fit.scale;
+    const dipMm = useAppStore.getState().dipMm;
+    const s = pxPerMm(lm, W, H, dipMm) * fit.scale;
 
     if (face.matrix) {
       quaternionFromFaceMatrix(face.matrix, tmpQuat);
@@ -109,22 +106,37 @@ export function Glasses({ faceRef, spec, color, fit, smoothing }: GlassesProps) 
       const a = 1 - smoothing;
       g.position.lerp(tmpPos, a);
       g.quaternion.slerp(tmpQuat, a);
-      g.scale.lerp(new THREE.Vector3(s, s, s), a);
+      g.scale.lerp(tmpScale.set(s, s, s), a);
     }
   });
 
+  // Asignación de materiales: combi usa el acento metálico en aros (browline)
+  // o en puente/patillas (navigator); metal y acetato usan el material frame.
+  const combi = spec.material === 'combi';
+  const rimMat = combi && spec.browline ? mats.accent : mats.frame;
+  const bridgeMat = combi ? mats.accent : mats.frame;
+  const templeMat = combi && !spec.browline ? mats.accent : mats.frame;
+
   return (
     <group ref={outer} visible={false}>
-      {/* Ajustes finos en el espacio local de la cabeza (mm). */}
-      <group position={[0, fit.offsetY, 0]} scale={[fit.width, 1, 1]}>
+      {/* Ajustes finos en el espacio local de la cabeza (mm): altura, ancho e
+          inclinación pantoscópica (el frente rota hacia las mejillas). */}
+      <group
+        position={[0, fit.offsetY, 0]}
+        scale={[fit.width, 1, 1]}
+        rotation={[-THREE.MathUtils.degToRad(fit.tiltDeg), 0, 0]}
+      >
         {geos.rims.map((geo, i) => (
-          <mesh key={`rim-${i}`} geometry={geo} material={mats.frame} />
+          <mesh key={`rim-${i}`} geometry={geo} material={rimMat} />
         ))}
         {geos.bridges.map((geo, i) => (
-          <mesh key={`bridge-${i}`} geometry={geo} material={mats.frame} />
+          <mesh key={`bridge-${i}`} geometry={geo} material={bridgeMat} />
         ))}
         {geos.temples.map((geo, i) => (
-          <mesh key={`temple-${i}`} geometry={geo} material={mats.frame} />
+          <mesh key={`temple-${i}`} geometry={geo} material={templeMat} />
+        ))}
+        {geos.browBars.map((geo, i) => (
+          <mesh key={`brow-${i}`} geometry={geo} material={mats.frame} />
         ))}
         {geos.lenses.map((geo, i) => (
           <mesh key={`lens-${i}`} geometry={geo} material={mats.lens} />
