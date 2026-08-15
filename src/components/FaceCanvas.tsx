@@ -4,7 +4,7 @@ import { FaceTracker } from '../core/face/tracker';
 import type { FaceFrame } from '../core/face/types';
 import { LM } from '../core/face/types';
 import { bitemporalPx, interpupillaryPx } from '../core/face/measures';
-import { selectedColor, selectedFrame, useAppStore } from '../state/store';
+import { useAppStore } from '../state/store';
 import { Glasses } from './Glasses';
 
 export type FaceSource =
@@ -44,16 +44,12 @@ export function FaceCanvas({ source }: { source: FaceSource }) {
   // ambos contextos GL a la vez puede bloquear en renderers de software.
   const [glReady, setGlReady] = useState(false);
 
-  const frameId = useAppStore((s) => s.frameId);
-  const colorId = useAppStore((s) => s.colorId);
   const fit = useAppStore((s) => s.fit);
   const debugMesh = useAppStore((s) => s.debugMesh);
   const setFaceDetected = useAppStore((s) => s.setFaceDetected);
   const setMeasures = useAppStore((s) => s.setMeasures);
   const setTrackerStatus = useAppStore((s) => s.setTrackerStatus);
 
-  const spec = selectedFrame(frameId);
-  const color = selectedColor(colorId);
   const isWebcam = source.kind === 'webcam';
 
   // Pipeline de detección: una pasada para foto, bomba autorregulada para webcam.
@@ -213,13 +209,7 @@ export function FaceCanvas({ source }: { source: FaceSource }) {
           <ambientLight intensity={1.1} />
           <directionalLight position={[120, 200, 400]} intensity={1.4} />
           <directionalLight position={[-200, 50, 200]} intensity={0.5} />
-          <Glasses
-            faceRef={faceRef}
-            spec={spec}
-            color={color}
-            fit={fit}
-            smoothing={isWebcam ? 0.55 : 1}
-          />
+          <Glasses faceRef={faceRef} fit={fit} smoothing={isWebcam ? 0.55 : 1} />
         </Canvas>
         <canvas
           ref={meshCanvasRef}

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, type MutableRefObject } from 'react';
+import { Suspense, useEffect, useMemo, useRef, type MutableRefObject } from 'react';
 import * as THREE from 'three';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useFrame, useLoader, useThree } from '@react-three/fiber';
 import type { FaceFrame } from '../core/face/types';
 import { LM } from '../core/face/types';
 import { pxPerMm } from '../core/face/measures';
@@ -8,7 +8,10 @@ import { buildFrameGeometries } from '../core/frames/generator';
 import { buildMaterials } from '../core/frames/materials';
 import type { FrameSpec } from '../core/frames/spec';
 import type { FrameColor } from '../core/color/palette';
-import { useAppStore, type FitAdjust } from '../state/store';
+import { selectedColor, selectedFrame, useAppStore, type FitAdjust } from '../state/store';
+
+/** Ancho nominal asumido para una foto de producto (frente completo), mm. */
+const PNG_FRAME_WIDTH_MM = 145;
 
 const tmpMatrix = new THREE.Matrix4();
 const tmpQuat = new THREE.Quaternion();
@@ -82,10 +85,55 @@ export function GlassesModel({
   );
 }
 
+/**
+ * Foto real de producto (PNG transparente subido por el usuario) como plano
+ * texturizado en mm. De frente es idéntica al producto; al girar la cabeza
+ * es plana (sin volumen), a diferencia de los armazones procedurales.
+ */
+function ImageFrame({ url, fit }: { url: string; fit: FitAdjust }) {
+  const texture = useLoader(THREE.TextureLoader, url);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const img = texture.image as { width: number; height: number };
+  const w = PNG_FRAME_WIDTH_MM;
+  const h = (w * img.height) / img.width;
+  return (
+    <group
+      position={[0, fit.offsetY, 0]}
+      scale={[fit.width, 1, 1]}
+      rotation={[-THREE.MathUtils.degToRad(fit.tiltDeg), 0, 0]}
+    >
+      <mesh>
+        <planeGeometry args={[w, h]} />
+        <meshBasicMaterial map={texture} transparent depthWrite={false} toneMapped={false} />
+      </mesh>
+    </group>
+  );
+}
+
+/**
+ * El armazón activo según el estado global: imagen PNG real si hay una
+ * seleccionada, si no el procedural elegido. Compartido por foto/webcam y 3D.
+ */
+export function ActiveGlasses() {
+  const frameId = useAppStore((s) => s.frameId);
+  const colorId = useAppStore((s) => s.colorId);
+  const fit = useAppStore((s) => s.fit);
+  const customFrames = useAppStore((s) => s.customFrames);
+  const selectedCustomId = useAppStore((s) => s.selectedCustomId);
+
+  const custom = customFrames.find((c) => c.id === selectedCustomId) ?? null;
+  if (custom) {
+    return (
+      <Suspense fallback={null}>
+        <ImageFrame url={custom.url} fit={fit} />
+      </Suspense>
+    );
+  }
+  return <GlassesModel spec={selectedFrame(frameId)} color={selectedColor(colorId)} fit={fit} />;
+}
+
 interface GlassesProps {
   faceRef: MutableRefObject<FaceFrame | null>;
-  spec: FrameSpec;
-  color: FrameColor;
   fit: FitAdjust;
   /** 1 = sin suavizado (foto); <1 = interpolación temporal (webcam). */
   smoothing: number;
@@ -111,7 +159,7 @@ function quaternionFromFaceMatrix(data: number[], out: THREE.Quaternion): void {
  *  - posición: landmark 168 (raíz nasal), en px del overlay
  *  - escala px→mm: DIP calibrada (iris 468/473) o ancho bitemporal asumido
  */
-export function Glasses({ faceRef, spec, color, fit, smoothing }: GlassesProps) {
+export function Glasses({ faceRef, fit, smoothing }: GlassesProps) {
   const outer = useRef<THREE.Group>(null);
   const { size } = useThree();
 
@@ -156,7 +204,7 @@ export function Glasses({ faceRef, spec, color, fit, smoothing }: GlassesProps) 
 
   return (
     <group ref={outer} visible={false}>
-      <GlassesModel spec={spec} color={color} fit={fit} />
+      <ActiveGlasses />
     </group>
   );
 }

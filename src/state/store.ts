@@ -9,6 +9,13 @@ export const COLORS = colorsSeed as FrameColor[];
 
 export type SourceKind = 'photo' | 'webcam' | 'head3d';
 
+/** Armazón desde imagen PNG real (subida por el usuario, nunca sale del navegador). */
+export interface CustomFrameImage {
+  id: string;
+  name: string;
+  url: string;
+}
+
 export interface FitAdjust {
   /** Escala global ±10% (1 = calculada desde los landmarks). */
   scale: number;
@@ -32,6 +39,9 @@ interface AppState {
   sourceKind: SourceKind;
   frameId: string;
   colorId: string;
+  customFrames: CustomFrameImage[];
+  /** Si está seteado, se renderiza la imagen PNG en lugar del armazón procedural. */
+  selectedCustomId: string | null;
   fit: FitAdjust;
   /** DIP real de la usuaria en mm (opcional, calibra px→mm). */
   dipMm: number | null;
@@ -43,6 +53,8 @@ interface AppState {
   setSourceKind: (kind: SourceKind) => void;
   setFrameId: (id: string) => void;
   setColorId: (id: string) => void;
+  addCustomFrame: (frame: CustomFrameImage) => void;
+  selectCustomFrame: (id: string) => void;
   setFit: (fit: Partial<FitAdjust>) => void;
   resetFit: () => void;
   setDipMm: (mm: number | null) => void;
@@ -56,6 +68,8 @@ export const useAppStore = create<AppState>((set) => ({
   sourceKind: 'photo',
   frameId: FRAMES[0].id,
   colorId: COLORS[0].id,
+  customFrames: [],
+  selectedCustomId: null,
   fit: { ...DEFAULT_FIT },
   dipMm: null,
   debugMesh: false,
@@ -63,8 +77,12 @@ export const useAppStore = create<AppState>((set) => ({
   measures: null,
   trackerStatus: 'loading',
   setSourceKind: (sourceKind) => set({ sourceKind }),
-  setFrameId: (frameId) => set({ frameId }),
+  // Elegir un armazón procedural deselecciona la imagen PNG, y viceversa.
+  setFrameId: (frameId) => set({ frameId, selectedCustomId: null }),
   setColorId: (colorId) => set({ colorId }),
+  addCustomFrame: (frame) =>
+    set((s) => ({ customFrames: [...s.customFrames, frame], selectedCustomId: frame.id })),
+  selectCustomFrame: (selectedCustomId) => set({ selectedCustomId }),
   setFit: (fit) => set((s) => ({ fit: { ...s.fit, ...fit } })),
   resetFit: () => set({ fit: { ...DEFAULT_FIT } }),
   setDipMm: (dipMm) => set({ dipMm }),

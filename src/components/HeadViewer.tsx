@@ -4,8 +4,8 @@ import { Canvas, type ThreeEvent } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DEFAULT_BITEMPORAL_MM } from '../core/face/measures';
-import { selectedColor, selectedFrame, useAppStore } from '../state/store';
-import { GlassesModel } from './Glasses';
+import { useAppStore } from '../state/store';
+import { ActiveGlasses } from './Glasses';
 
 type AnchorKey = 'rightTemple' | 'leftTemple' | 'noseBridge';
 
@@ -40,11 +40,7 @@ interface ModelInfo {
 
 /** Armazón montado sobre el mesh usando los 3 puntos de anclaje. */
 function MountedGlasses({ anchors }: { anchors: HeadAnchors }) {
-  const frameId = useAppStore((s) => s.frameId);
-  const colorId = useAppStore((s) => s.colorId);
   const fit = useAppStore((s) => s.fit);
-  const spec = selectedFrame(frameId);
-  const color = selectedColor(colorId);
 
   const mount = useMemo(() => {
     if (!anchors.rightTemple || !anchors.leftTemple || !anchors.noseBridge) return null;
@@ -77,7 +73,7 @@ function MountedGlasses({ anchors }: { anchors: HeadAnchors }) {
     >
       {/* Separa el frente unos mm de la piel, como apoyan las plaquetas. */}
       <group position={[0, 0, 6]}>
-        <GlassesModel spec={spec} color={color} fit={fit} />
+        <ActiveGlasses />
       </group>
     </group>
   );
