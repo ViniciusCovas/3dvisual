@@ -1,7 +1,9 @@
 import type { FaceFrame } from './types';
 import type { WorkerResponse } from './protocol';
 
-const LOCAL_TASK = '/models/face_landmarker.task';
+// Relativo a la base de despliegue (import.meta.env.BASE_URL termina en '/'),
+// para que funcione igual en raíz local y bajo /<repo>/ en GitHub Pages.
+const LOCAL_TASK = `${import.meta.env.BASE_URL}models/face_landmarker.task`;
 const CDN_TASK =
   'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task';
 
