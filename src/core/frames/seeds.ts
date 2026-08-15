@@ -2,12 +2,14 @@ import framesSeed from '../../data/frames.seed.json';
 import { buildLensPath, type OutlineParams } from './outline';
 import type { BridgeStyle, FrameMaterial, FrameSpec } from './spec';
 
+export type FrameGroup = 'recomendada' | 'control' | 'rayban';
+
 /** Entrada del seed JSON: parámetros de autoría en lugar de bezier crudos. */
 interface SeedFrame {
   id: string;
   name: string;
   description: string;
-  group: 'recomendada' | 'control';
+  group: FrameGroup;
   lensWidthMm: number;
   bridgeMm: number;
   lensHeightMm: number;
@@ -21,7 +23,7 @@ interface SeedFrame {
 }
 
 export interface SeedGroupedFrame extends FrameSpec {
-  group: 'recomendada' | 'control';
+  group: FrameGroup;
 }
 
 /**

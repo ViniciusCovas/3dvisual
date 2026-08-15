@@ -71,6 +71,7 @@ export function FramePicker() {
   const groups = [
     { key: 'recomendada', label: 'Recomendadas del análisis' },
     { key: 'control', label: 'De control (para comparar)' },
+    { key: 'rayban', label: 'Inspirados en Ray-Ban · medidas de catálogo (aprox.)' },
   ] as const;
 
   return (
