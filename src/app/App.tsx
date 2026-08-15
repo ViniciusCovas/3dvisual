@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FaceCanvas, type FaceSource } from '../components/FaceCanvas';
+import { HeadViewer } from '../components/HeadViewer';
 import { FramePicker } from '../components/FramePicker';
 import { ColorPicker } from '../components/ColorPicker';
 import { FitControls } from '../components/FitControls';
@@ -46,7 +47,7 @@ export default function App() {
   const switchTo = useCallback(
     (kind: SourceKind) => {
       setSourceKind(kind);
-      if (kind === 'photo') stopWebcam();
+      if (kind !== 'webcam') stopWebcam();
     },
     [setSourceKind, stopWebcam],
   );
@@ -99,15 +100,17 @@ export default function App() {
   }, [sourceKind, photoUrl, stream]);
 
   const statusText =
-    trackerStatus === 'loading'
-      ? 'Cargando modelo de rostro…'
-      : trackerStatus === 'error'
-        ? 'Error cargando el modelo (revisa la consola)'
-        : source
-          ? faceDetected
-            ? 'Rostro detectado'
-            : 'Buscando rostro…'
-          : 'Elige una fuente';
+    sourceKind === 'head3d'
+      ? 'Modo cabeza 3D'
+      : trackerStatus === 'loading'
+        ? 'Cargando modelo de rostro…'
+        : trackerStatus === 'error'
+          ? 'Error cargando el modelo (revisa la consola)'
+          : source
+            ? faceDetected
+              ? 'Rostro detectado'
+              : 'Buscando rostro…'
+            : 'Elige una fuente';
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
@@ -143,6 +146,16 @@ export default function App() {
             >
               Webcam
             </button>
+            <button
+              onClick={() => switchTo('head3d')}
+              className={`rounded-lg px-4 py-1.5 text-sm font-medium transition ${
+                sourceKind === 'head3d'
+                  ? 'bg-amber-400 text-zinc-900'
+                  : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+              }`}
+            >
+              Cabeza 3D
+            </button>
             <span className="ml-auto text-xs text-zinc-500">
               {statusText}
               {debugMesh && ' · malla ON'}
@@ -158,7 +171,9 @@ export default function App() {
             onDrop={onDrop}
             className={dragOver ? 'rounded-xl ring-2 ring-amber-400' : ''}
           >
-            {source ? (
+            {sourceKind === 'head3d' ? (
+              <HeadViewer />
+            ) : source ? (
               <FaceCanvas source={source} />
             ) : (
               <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-4 rounded-xl border-2 border-dashed border-zinc-700 bg-zinc-900">

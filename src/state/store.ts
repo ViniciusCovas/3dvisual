@@ -7,7 +7,7 @@ import type { FrameColor } from '../core/color/palette';
 export { FRAMES };
 export const COLORS = colorsSeed as FrameColor[];
 
-export type SourceKind = 'photo' | 'webcam';
+export type SourceKind = 'photo' | 'webcam' | 'head3d';
 
 export interface FitAdjust {
   /** Escala global ±10% (1 = calculada desde los landmarks). */

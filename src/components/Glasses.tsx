@@ -10,46 +10,25 @@ import type { FrameSpec } from '../core/frames/spec';
 import type { FrameColor } from '../core/color/palette';
 import { useAppStore, type FitAdjust } from '../state/store';
 
-interface GlassesProps {
-  faceRef: MutableRefObject<FaceFrame | null>;
-  spec: FrameSpec;
-  color: FrameColor;
-  fit: FitAdjust;
-  /** 1 = sin suavizado (foto); <1 = interpolación temporal (webcam). */
-  smoothing: number;
-}
-
 const tmpMatrix = new THREE.Matrix4();
 const tmpQuat = new THREE.Quaternion();
 const tmpPos = new THREE.Vector3();
 const tmpScale = new THREE.Vector3();
 
 /**
- * Extrae la rotación de la facialTransformationMatrix. MediaPipe entrega la
- * matriz como array plano; detectamos el layout (row/column-major) mirando en
- * qué ranuras cae la traslación (la cabeza está a decenas de cm de la cámara,
- * así que la traslación domina claramente).
+ * Modelo del armazón en mm con los ajustes finos del usuario aplicados en el
+ * espacio local de la cabeza (altura, ancho, inclinación pantoscópica).
+ * Es compartido por el rig de foto/webcam y por el montaje sobre GLB (M4).
  */
-function quaternionFromFaceMatrix(data: number[], out: THREE.Quaternion): void {
-  tmpMatrix.fromArray(data); // asume column-major
-  const colT = Math.abs(data[12]) + Math.abs(data[13]) + Math.abs(data[14]);
-  const rowT = Math.abs(data[3]) + Math.abs(data[7]) + Math.abs(data[11]);
-  if (rowT > colT) tmpMatrix.transpose();
-  out.setFromRotationMatrix(tmpMatrix);
-}
-
-/**
- * Lentes procedurales anclados a la cabeza:
- *  - rotación: facialTransformationMatrix (pose de cabeza)
- *  - posición: landmark 168 (raíz nasal), en px del overlay
- *  - escala px→mm: DIP calibrada (iris 468/473) o ancho bitemporal asumido
- * El grupo exterior lleva pose y escala global; el interior, los ajustes
- * finos del usuario en coordenadas locales de la cabeza (mm).
- */
-export function Glasses({ faceRef, spec, color, fit, smoothing }: GlassesProps) {
-  const outer = useRef<THREE.Group>(null);
-  const { size } = useThree();
-
+export function GlassesModel({
+  spec,
+  color,
+  fit,
+}: {
+  spec: FrameSpec;
+  color: FrameColor;
+  fit: FitAdjust;
+}) {
   const geos = useMemo(() => buildFrameGeometries(spec), [spec]);
   const mats = useMemo(
     () => buildMaterials(color.hex, color.finish, spec.material),
@@ -70,6 +49,71 @@ export function Glasses({ faceRef, spec, color, fit, smoothing }: GlassesProps) 
       mats.accent.dispose();
     };
   }, [mats]);
+
+  // Asignación de materiales: combi usa el acento metálico en aros (browline)
+  // o en puente/patillas (navigator); metal y acetato usan el material frame.
+  const combi = spec.material === 'combi';
+  const rimMat = combi && spec.browline ? mats.accent : mats.frame;
+  const bridgeMat = combi ? mats.accent : mats.frame;
+  const templeMat = combi && !spec.browline ? mats.accent : mats.frame;
+
+  return (
+    <group
+      position={[0, fit.offsetY, 0]}
+      scale={[fit.width, 1, 1]}
+      rotation={[-THREE.MathUtils.degToRad(fit.tiltDeg), 0, 0]}
+    >
+      {geos.rims.map((geo, i) => (
+        <mesh key={`rim-${i}`} geometry={geo} material={rimMat} />
+      ))}
+      {geos.bridges.map((geo, i) => (
+        <mesh key={`bridge-${i}`} geometry={geo} material={bridgeMat} />
+      ))}
+      {geos.temples.map((geo, i) => (
+        <mesh key={`temple-${i}`} geometry={geo} material={templeMat} />
+      ))}
+      {geos.browBars.map((geo, i) => (
+        <mesh key={`brow-${i}`} geometry={geo} material={mats.frame} />
+      ))}
+      {geos.lenses.map((geo, i) => (
+        <mesh key={`lens-${i}`} geometry={geo} material={mats.lens} />
+      ))}
+    </group>
+  );
+}
+
+interface GlassesProps {
+  faceRef: MutableRefObject<FaceFrame | null>;
+  spec: FrameSpec;
+  color: FrameColor;
+  fit: FitAdjust;
+  /** 1 = sin suavizado (foto); <1 = interpolación temporal (webcam). */
+  smoothing: number;
+}
+
+/**
+ * Extrae la rotación de la facialTransformationMatrix. MediaPipe entrega la
+ * matriz como array plano; detectamos el layout (row/column-major) mirando en
+ * qué ranuras cae la traslación (la cabeza está a decenas de cm de la cámara,
+ * así que la traslación domina claramente).
+ */
+function quaternionFromFaceMatrix(data: number[], out: THREE.Quaternion): void {
+  tmpMatrix.fromArray(data); // asume column-major
+  const colT = Math.abs(data[12]) + Math.abs(data[13]) + Math.abs(data[14]);
+  const rowT = Math.abs(data[3]) + Math.abs(data[7]) + Math.abs(data[11]);
+  if (rowT > colT) tmpMatrix.transpose();
+  out.setFromRotationMatrix(tmpMatrix);
+}
+
+/**
+ * Rig de foto/webcam: lentes anclados a la cabeza detectada.
+ *  - rotación: facialTransformationMatrix (pose de cabeza)
+ *  - posición: landmark 168 (raíz nasal), en px del overlay
+ *  - escala px→mm: DIP calibrada (iris 468/473) o ancho bitemporal asumido
+ */
+export function Glasses({ faceRef, spec, color, fit, smoothing }: GlassesProps) {
+  const outer = useRef<THREE.Group>(null);
+  const { size } = useThree();
 
   useFrame(() => {
     const g = outer.current;
@@ -110,38 +154,9 @@ export function Glasses({ faceRef, spec, color, fit, smoothing }: GlassesProps) 
     }
   });
 
-  // Asignación de materiales: combi usa el acento metálico en aros (browline)
-  // o en puente/patillas (navigator); metal y acetato usan el material frame.
-  const combi = spec.material === 'combi';
-  const rimMat = combi && spec.browline ? mats.accent : mats.frame;
-  const bridgeMat = combi ? mats.accent : mats.frame;
-  const templeMat = combi && !spec.browline ? mats.accent : mats.frame;
-
   return (
     <group ref={outer} visible={false}>
-      {/* Ajustes finos en el espacio local de la cabeza (mm): altura, ancho e
-          inclinación pantoscópica (el frente rota hacia las mejillas). */}
-      <group
-        position={[0, fit.offsetY, 0]}
-        scale={[fit.width, 1, 1]}
-        rotation={[-THREE.MathUtils.degToRad(fit.tiltDeg), 0, 0]}
-      >
-        {geos.rims.map((geo, i) => (
-          <mesh key={`rim-${i}`} geometry={geo} material={rimMat} />
-        ))}
-        {geos.bridges.map((geo, i) => (
-          <mesh key={`bridge-${i}`} geometry={geo} material={bridgeMat} />
-        ))}
-        {geos.temples.map((geo, i) => (
-          <mesh key={`temple-${i}`} geometry={geo} material={templeMat} />
-        ))}
-        {geos.browBars.map((geo, i) => (
-          <mesh key={`brow-${i}`} geometry={geo} material={mats.frame} />
-        ))}
-        {geos.lenses.map((geo, i) => (
-          <mesh key={`lens-${i}`} geometry={geo} material={mats.lens} />
-        ))}
-      </group>
+      <GlassesModel spec={spec} color={color} fit={fit} />
     </group>
   );
 }
