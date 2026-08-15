@@ -1,0 +1,92 @@
+[
+  {
+    "id": "cuadrado-suavizado",
+    "name": "Cuadrado suavizado con lift",
+    "description": "Rectangular de esquinas suaves con lift exterior sutil. La geometría prioritaria del análisis.",
+    "lensWidth": 52,
+    "lensHeight": 42,
+    "bridge": 18,
+    "rimThickness": 3.2,
+    "depth": 3.5,
+    "doubleBridge": false,
+    "outline": {
+      "topSquareness": 3.4,
+      "bottomSquareness": 3.0,
+      "outerLift": 1.5,
+      "bottomTaper": 0,
+      "pantoRound": 0
+    }
+  },
+  {
+    "id": "panto-grande",
+    "name": "Panto grande",
+    "description": "Redondo con parte superior levemente recta, en tamaño generoso.",
+    "lensWidth": 51,
+    "lensHeight": 44,
+    "bridge": 19,
+    "rimThickness": 3.0,
+    "depth": 3.2,
+    "doubleBridge": false,
+    "outline": {
+      "topSquareness": 2.6,
+      "bottomSquareness": 2.2,
+      "outerLift": 0,
+      "bottomTaper": 0,
+      "pantoRound": 0.8
+    }
+  },
+  {
+    "id": "cat-eye-sutil",
+    "name": "Cat-eye sutil",
+    "description": "Elevación exterior marcada pero elegante, sin exagerar la punta.",
+    "lensWidth": 52,
+    "lensHeight": 40,
+    "bridge": 17,
+    "rimThickness": 3.4,
+    "depth": 3.6,
+    "doubleBridge": false,
+    "outline": {
+      "topSquareness": 2.8,
+      "bottomSquareness": 2.4,
+      "outerLift": 3.5,
+      "bottomTaper": 1.5,
+      "pantoRound": 0.3
+    }
+  },
+  {
+    "id": "wayfarer-amplio",
+    "name": "Wayfarer amplio",
+    "description": "Trapecio clásico con base más angosta y presencia en la parte superior.",
+    "lensWidth": 54,
+    "lensHeight": 42,
+    "bridge": 17,
+    "rimThickness": 3.8,
+    "depth": 4.2,
+    "doubleBridge": false,
+    "outline": {
+      "topSquareness": 3.8,
+      "bottomSquareness": 2.8,
+      "outerLift": 1.0,
+      "bottomTaper": 4.0,
+      "pantoRound": 0
+    }
+  },
+  {
+    "id": "navigator-doble-puente",
+    "name": "Navigator doble puente",
+    "description": "Cuadrado amplio con doble puente metálico, aire aviator moderno.",
+    "lensWidth": 54,
+    "lensHeight": 44,
+    "bridge": 16,
+    "rimThickness": 2.6,
+    "depth": 3.0,
+    "doubleBridge": true,
+    "outline": {
+      "topSquareness": 3.2,
+      "bottomSquareness": 2.5,
+      "outerLift": 0.5,
+      "bottomTaper": 3.0,
+      "pantoRound": 0.2
+    }
+  }
+]
